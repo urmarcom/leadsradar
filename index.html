@@ -59,6 +59,10 @@ select:focus-visible,button:focus-visible{outline:3px solid var(--focus);outline
 .tablebox{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow-x:auto}
 table{width:100%;border-collapse:collapse;min-width:900px}
 th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+th.sort{cursor:pointer;user-select:none}
+th.sort:hover{color:var(--ink)}
+th.sort.on{color:var(--ink)}
+.arr{font-size:10px;margin-left:3px}.arr:empty{display:none}
 th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;background:var(--soft)}
 td{font-size:14px;font-variant-numeric:tabular-nums}
 td.name{white-space:normal;max-width:280px;font-weight:500}
@@ -142,7 +146,7 @@ details ul{margin:10px 0 4px;padding-left:20px;display:flex;flex-direction:colum
 
   <div class="tablebox">
     <table>
-      <thead><tr><th class="chk" title="Followed up">✓</th><th>Customer Name</th><th>Phone Number</th><th>Assigned CSC</th><th>Status</th><th>Last Reply Date</th><th>Last Enquiry Date</th><th>Category</th></tr></thead>
+      <thead><tr><th class="chk" title="Followed up">✓</th><th class="sort" data-k="name" tabindex="0" aria-sort="none">Customer Name<span class="arr"></span></th><th class="sort" data-k="phone" tabindex="0" aria-sort="none">Phone Number<span class="arr"></span></th><th class="sort" data-k="csc" tabindex="0" aria-sort="none">Assigned CSC<span class="arr"></span></th><th class="sort" data-k="status" tabindex="0" aria-sort="none">Status<span class="arr"></span></th><th class="sort" data-k="reply" tabindex="0" aria-sort="none">Last Reply Date<span class="arr"></span></th><th class="sort" data-k="enq" tabindex="0" aria-sort="none">Last Enquiry Date<span class="arr"></span></th><th class="sort" data-k="cat" tabindex="0" aria-sort="none">Category<span class="arr"></span></th></tr></thead>
       <tbody id="tbody"><tr><td colspan="8" class="loading">Loading leads…</td></tr></tbody>
     </table>
   </div>
@@ -206,9 +210,25 @@ function render(){
   const n={hot:0,warm:0,cold:0};for(const r of base)n[CATS[r[5]]]++;
   for(const c of CATS){$('n-'+c).textContent=n[c].toLocaleString('en-US');document.querySelector('.tile[data-c="'+c+'"]').classList.toggle('on',cat===c)}
   view = cat==='all' ? base : base.filter(r=>CATS[r[5]]===cat);
+  if(sortK) view=sortView(view);
   $('count').textContent=view.length.toLocaleString('en-US')+' leads shown';
   drawPage();
 }
+let sortK=null, sortDir=1;
+function sortView(v){
+  const col=new Intl.Collator('en',{sensitivity:'base',numeric:true});
+  const key={name:r=>r[0]||'',phone:r=>r[1]||'',csc:r=>D.cscs[r[2]],status:r=>D.statuses[r[6]],reply:r=>r[3],enq:r=>r[4],cat:r=>r[5]}[sortK];
+  const num=sortK==='reply'||sortK==='enq'||sortK==='cat';
+  // blanks always go last; ties keep the original priority order
+  return v.map((r,i)=>[r,i]).sort((a,b)=>{const x=key(a[0]),y=key(b[0]);const ex=num?!x&&sortK!=='cat':x==='',ey=num?!y&&sortK!=='cat':y==='';
+    if(ex!==ey)return ex?1:-1; const c=num?(x-y):col.compare(x,y); return c?c*sortDir:a[1]-b[1]}).map(p=>p[0]);
+}
+function setSort(k){
+  if(sortK===k){ if(sortDir===1)sortDir=-1; else {sortK=null;sortDir=1} } else {sortK=k;sortDir=(k==='reply'||k==='enq')?-1:1}
+  document.querySelectorAll('th.sort').forEach(th=>{const on=th.dataset.k===sortK;th.classList.toggle('on',on);th.querySelector('.arr').textContent=on?(sortDir===1?'▲':'▼'):'';th.setAttribute('aria-sort',on?(sortDir===1?'ascending':'descending'):'none')});
+  page=0;render();
+}
+document.querySelectorAll('th.sort').forEach(th=>{th.addEventListener('click',()=>setSort(th.dataset.k));th.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSort(th.dataset.k)}})});
 function drawPage(){
   const pages=Math.max(1,Math.ceil(view.length/PER)); if(page>=pages)page=pages-1;
   const slice=view.slice(page*PER,(page+1)*PER);
